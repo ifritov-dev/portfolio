@@ -223,6 +223,8 @@ section h2 {
     max-width: 1200px;
     width: 100%;
     margin: 0 auto;
+    content-visibility: auto;
+    contain-intrinsic-size: 1px 900px;
 }
 
 /* Projects Section */
@@ -243,6 +245,8 @@ section h2 {
     flex-direction: column;
     transition: transform 0.3s ease, border-color 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    contain: layout paint style;
+    will-change: transform;
 }
 
 .project-card:hover {
@@ -341,6 +345,7 @@ section h2 {
     flex-direction: column;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     transition: transform 0.3s ease, border-color 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
+    contain: layout paint style;
 }
 
 .skill-category:hover {
@@ -562,6 +567,16 @@ section h2 {
 
 /* Responsive Design */
 @media (max-width: 1024px) {
+    #bubbles-canvas {
+        filter: blur(8px);
+    }
+
+    .project-card,
+    .skill-category,
+    .contact-links a {
+        backdrop-filter: blur(12px);
+    }
+
     .skills-grid,
     .projects-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -626,6 +641,12 @@ section h2 {
         min-height: auto;
         width: 100%;
         box-sizing: border-box;
+    }
+
+    .project-card,
+    .skill-category,
+    .contact-links a {
+        backdrop-filter: blur(8px);
     }
 
     .project-card h3,
@@ -740,8 +761,9 @@ section h2 {
     pointer-events: none;
     z-index: 9999;
     transform: translate(-50%, -50%);
-    transition: opacity 1s ease-out;
+    transition: opacity 0.6s ease-out;
     opacity: 1;
+    will-change: transform, opacity;
 }
 
 @media (max-width: 768px) {

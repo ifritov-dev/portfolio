@@ -8,7 +8,7 @@ const renderer = new THREE.WebGLRenderer({
 });
 
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 camera.position.z = 30;
 
 // Add ambient light for realistic 3D rendering
@@ -19,12 +19,15 @@ scene.add(ambientLight);
 const bubbles = [];
 const bubbleCount = 15; // Reduced for calmer effect
 const yellowColor = new THREE.Color(0xFFD700);
+const isMobile = window.matchMedia('(max-width: 768px)').matches;
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const bubbleSegments = isMobile ? 18 : 24;
 
 class Bubble {
     constructor() {
         // Larger bubbles: 2-6 units instead of 0.5-2.5
         const size = Math.random() * 4 + 2;
-        const geometry = new THREE.SphereGeometry(size, 32, 32);
+        const geometry = new THREE.SphereGeometry(size, bubbleSegments, bubbleSegments);
         
         // Store original vertices for deformation
         this.originalVertices = [];
@@ -65,6 +68,7 @@ class Bubble {
         this.deformSpeed = Math.random() * 0.008 + 0.004;
         this.deformAmount = Math.random() * 0.4 + 0.2;
         this.time = Math.random() * Math.PI * 2;
+        this.frameOffset = Math.floor(Math.random() * 2);
         
         // Add point light for ambient glow
         this.light = new THREE.PointLight(0xFFD700, 0.5, 20);
@@ -74,7 +78,7 @@ class Bubble {
         scene.add(this.light);
     }
     
-    update() {
+    update(frameCount) {
         // Move bubble
         this.mesh.position.x += this.velocity.x;
         this.mesh.position.y += this.velocity.y;
@@ -91,6 +95,10 @@ class Bubble {
         // Deform vertices
         this.time += this.deformSpeed;
         const positions = this.mesh.geometry.attributes.position;
+
+        if (reduceMotion || ((frameCount + this.frameOffset) % 2 !== 0)) {
+            return;
+        }
         
         for (let i = 0; i < positions.count; i++) {
             const i3 = i * 3;
@@ -117,11 +125,14 @@ for (let i = 0; i < bubbleCount; i++) {
     bubbles.push(new Bubble());
 }
 
+let frameCount = 0;
+
 // Animation loop
 function animate() {
     requestAnimationFrame(animate);
-    
-    bubbles.forEach(bubble => bubble.update());
+
+    frameCount += 1;
+    bubbles.forEach((bubble) => bubble.update(frameCount));
     
     renderer.render(scene, camera);
 }
@@ -133,15 +144,66 @@ window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 });
 
 // Lanyard API Integration
 const DISCORD_USER_ID = '940165136440766464';
 const LANYARD_API_URL = `https://api.lanyard.rest/v1/users/${DISCORD_USER_ID}`;
 const CACHE_DURATION = 60000; // 1 minute in milliseconds
+const LOCAL_CACHE_KEY = 'discord_presence_cache_v2';
+const REQUEST_TIMEOUT = 8000;
 
 let cachedData = null;
 let lastFetchTime = 0;
+
+function readLocalCache() {
+    try {
+        const raw = localStorage.getItem(LOCAL_CACHE_KEY);
+        if (!raw) {
+            return null;
+        }
+
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') {
+            return null;
+        }
+
+        if (typeof parsed.timestamp !== 'number' || !parsed.data) {
+            return null;
+        }
+
+        return parsed;
+    } catch {
+        return null;
+    }
+}
+
+function writeLocalCache(data, timestamp) {
+    try {
+        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({ data, timestamp }));
+    } catch {
+        // Ignore quota/storage mode failures.
+    }
+}
+
+function getDiscordDefaultAvatarUrl(id) {
+    const fallbackIndex = Number(id) % 5;
+    return `https://cdn.discordapp.com/embed/avatars/${fallbackIndex}.png`;
+}
+
+function buildDiscordAvatarUrl(user) {
+    if (!user || !user.id) {
+        return '';
+    }
+
+    if (!user.avatar) {
+        return getDiscordDefaultAvatarUrl(user.id);
+    }
+
+    const ext = user.avatar.startsWith('a_') ? 'gif' : 'png';
+    return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${ext}?size=256`;
+}
 
 async function fetchDiscordData() {
     const now = Date.now();
@@ -151,17 +213,48 @@ async function fetchDiscordData() {
         return cachedData;
     }
     
+    const localCache = readLocalCache();
+    if (!cachedData && localCache) {
+        cachedData = localCache.data;
+        lastFetchTime = localCache.timestamp;
+
+        if ((now - localCache.timestamp) < CACHE_DURATION) {
+            return cachedData;
+        }
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
     try {
-        const response = await fetch(LANYARD_API_URL);
+        const response = await fetch(LANYARD_API_URL, {
+            cache: 'no-store',
+            signal: controller.signal
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
         const data = await response.json();
         
         if (data.success && data.data) {
             cachedData = data.data;
             lastFetchTime = now;
+            writeLocalCache(cachedData, lastFetchTime);
             return cachedData;
         }
     } catch (error) {
         console.error('Failed to fetch Discord data:', error);
+        if (cachedData) {
+            return cachedData;
+        }
+
+        if (localCache?.data) {
+            return localCache.data;
+        }
+    } finally {
+        clearTimeout(timeout);
     }
     
     return null;
@@ -174,25 +267,50 @@ async function updateAvatar() {
     const data = await fetchDiscordData();
     
     if (data && data.discord_user) {
-        const { id, avatar } = data.discord_user;
-        const avatarUrl = `https://cdn.discordapp.com/avatars/${id}/${avatar}.png?size=256`;
-        
-        avatarImg.src = avatarUrl;
+        const avatarUrl = buildDiscordAvatarUrl(data.discord_user);
+
+        if (!avatarUrl) {
+            loader.classList.add('hidden');
+            avatarImg.style.display = 'none';
+            return;
+        }
+
+        const preloaded = new Image();
+        preloaded.decoding = 'async';
+        preloaded.referrerPolicy = 'no-referrer';
+
+        preloaded.onload = () => {
+            avatarImg.src = avatarUrl;
+            avatarImg.style.display = 'block';
+            loader.classList.add('hidden');
+        };
+
+        preloaded.onerror = () => {
+            const fallbackUrl = getDiscordDefaultAvatarUrl(data.discord_user.id);
+            avatarImg.src = fallbackUrl;
+            avatarImg.style.display = 'block';
+            loader.classList.add('hidden');
+        };
+
+        preloaded.src = avatarUrl;
         avatarImg.onload = () => {
             loader.classList.add('hidden');
         };
     } else {
-        // Fallback: hide loader and show placeholder
+        const localCache = readLocalCache();
+        const fallbackUser = localCache?.data?.discord_user;
+
+        if (fallbackUser?.id) {
+            avatarImg.src = buildDiscordAvatarUrl(fallbackUser) || getDiscordDefaultAvatarUrl(fallbackUser.id);
+            avatarImg.style.display = 'block';
+            loader.classList.add('hidden');
+            return;
+        }
+
         loader.classList.add('hidden');
         avatarImg.style.display = 'none';
     }
 }
-
-// Initial avatar load
-updateAvatar();
-
-// Refresh avatar data every minute
-setInterval(updateAvatar, CACHE_DURATION);
 
 // Discord Activity Display
 async function updateActivity() {
@@ -263,11 +381,15 @@ async function updateActivity() {
     }
 }
 
-// Initial activity load
-updateActivity();
+async function refreshDiscordUI() {
+    await Promise.allSettled([updateAvatar(), updateActivity()]);
+}
 
-// Refresh activity every minute (same as avatar)
-setInterval(updateActivity, CACHE_DURATION);
+// Initial data load
+refreshDiscordUI();
+
+// Refresh data every minute
+setInterval(refreshDiscordUI, CACHE_DURATION);
 
 // Scroll Indicators with IntersectionObserver
 const scrollIndicator = document.getElementById('scroll-indicator');
@@ -344,35 +466,77 @@ dots.forEach(dot => {
 });
 
 // Cursor trail effect
-const cursorTrail = [];
-const maxTrailLength = 20;
+const pointerFine = window.matchMedia('(pointer: fine)').matches;
 
-document.addEventListener('mousemove', (e) => {
-    // Create trail element
-    const trail = document.createElement('div');
-    trail.className = 'cursor-trail';
-    trail.style.left = e.clientX + 'px';
-    trail.style.top = e.clientY + 'px';
-    document.body.appendChild(trail);
-    
-    // Add to trail array
-    cursorTrail.push(trail);
-    
-    // Remove old trails
-    if (cursorTrail.length > maxTrailLength) {
-        const oldTrail = cursorTrail.shift();
-        oldTrail.remove();
-    }
-    
-    // Fade out and remove after 1 second
-    setTimeout(() => {
+if (pointerFine && !isMobile) {
+    const TRAIL_SIZE = 14;
+    const trails = [];
+    let trailIndex = 0;
+    let pointerX = 0;
+    let pointerY = 0;
+    let rafScheduled = false;
+
+    for (let i = 0; i < TRAIL_SIZE; i++) {
+        const trail = document.createElement('div');
+        trail.className = 'cursor-trail';
         trail.style.opacity = '0';
-        setTimeout(() => {
-            trail.remove();
-            const index = cursorTrail.indexOf(trail);
-            if (index > -1) {
-                cursorTrail.splice(index, 1);
-            }
-        }, 1000);
-    }, 50);
-});
+        document.body.appendChild(trail);
+        trails.push(trail);
+    }
+
+    function paintTrail() {
+        rafScheduled = false;
+        const trail = trails[trailIndex];
+        trailIndex = (trailIndex + 1) % TRAIL_SIZE;
+
+        trail.style.left = `${pointerX}px`;
+        trail.style.top = `${pointerY}px`;
+        trail.style.opacity = '0.8';
+
+        requestAnimationFrame(() => {
+            trail.style.opacity = '0';
+        });
+    }
+
+    document.addEventListener('mousemove', (e) => {
+        pointerX = e.clientX;
+        pointerY = e.clientY;
+
+        if (!rafScheduled) {
+            rafScheduled = true;
+            requestAnimationFrame(paintTrail);
+        }
+    }, { passive: true });
+}
+
+function syncProjectTagIconsFromSkills() {
+    const skillItems = document.querySelectorAll('.skill-item');
+    const iconByName = new Map();
+
+    skillItems.forEach((item) => {
+        const label = item.querySelector('span')?.textContent?.trim();
+        const icon = item.querySelector('svg.skill-icon');
+
+        if (label && icon && !iconByName.has(label)) {
+            iconByName.set(label, icon);
+        }
+    });
+
+    document.querySelectorAll('.project-tags .tag').forEach((tag) => {
+        const label = tag.textContent.trim();
+        const sourceIcon = iconByName.get(label);
+
+        if (!sourceIcon) {
+            return;
+        }
+
+        const clonedIcon = sourceIcon.cloneNode(true);
+        clonedIcon.classList.remove('skill-icon');
+        clonedIcon.classList.add('tag-icon');
+
+        tag.textContent = label;
+        tag.prepend(clonedIcon);
+    });
+}
+
+syncProjectTagIconsFromSkills();
