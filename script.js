@@ -394,6 +394,7 @@ setInterval(refreshDiscordUI, CACHE_DURATION);
 // Scroll Indicators with IntersectionObserver
 const scrollIndicator = document.getElementById('scroll-indicator');
 const endMessage = document.getElementById('end-message');
+const footer = document.querySelector('.footer');
 const dotsNav = document.getElementById('dots-nav');
 const dots = document.querySelectorAll('.dot');
 
@@ -432,12 +433,14 @@ const sectionObserver = new IntersectionObserver((entries) => {
                 scrollIndicator.classList.remove('hidden');
             }
             
-            // Show end message on contact section
+            // Show end message and footer on contact section
             if (sectionId === 'contact') {
                 endMessage.classList.add('visible');
+                footer.classList.add('visible');
                 scrollIndicator.classList.add('hidden');
             } else {
                 endMessage.classList.remove('visible');
+                footer.classList.remove('visible');
             }
         }
     });
