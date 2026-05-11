@@ -80,6 +80,14 @@ Update Discord user ID in `script.js`:
 const DISCORD_USER_ID = '940165136440766464'; // Change to your ID
 ```
 
+### GitHub Activity Graph
+Currently, the graph displays activity for the user `bl43ex`. To display your own GitHub contributions, replace `bl43ex` with your own GitHub username in the `fetch` URL within the `initGithubGraph` function in `script.js`:
+```javascript
+// Around line 400
+const response = await fetch('https://github-contributions-api.jogruber.de/v4/bl43ex');
+```
+Change `bl43ex` to your own GitHub username.
+
 ### Customization
 - **Colors**: Modify `#FFD700` in `style.css` for accent color
 - **Bubbles**: Adjust `bubbleCount` in `script.js` (line 20)

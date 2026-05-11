@@ -385,11 +385,75 @@ async function refreshDiscordUI() {
     await Promise.allSettled([updateAvatar(), updateActivity()]);
 }
 
+// GitHub Contribution Graph
+async function initGithubGraph() {
+    const graphContainer = document.getElementById('github-graph');
+    const totalCountLabel = document.getElementById('github-total-contributions');
+    if (!graphContainer) return;
+
+    try {
+        const response = await fetch('https://github-contributions-api.jogruber.de/v4/bl43ex');
+        if (!response.ok) throw new Error('Failed to fetch GitHub contributions');
+        
+        const data = await response.json();
+        let contributions = data.contributions;
+        
+        // Define "today" as May 11, 2026 (based on session context)
+        const today = new Date('2026-05-11');
+        
+        // Ensure data is sorted by date ascending
+        contributions.sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        // Filter out future dates and get exactly the last 365 days ending today
+        const filteredContributions = contributions.filter(day => new Date(day.date) <= today);
+        const lastYear = filteredContributions.slice(-365);
+        
+        // Calculate total contributions for the header
+        const total = lastYear.reduce((sum, day) => sum + day.count, 0);
+        if (totalCountLabel) {
+            totalCountLabel.textContent = `${total} contributions in the last year`;
+        }
+        
+        graphContainer.innerHTML = '';
+        
+        lastYear.forEach(day => {
+            const cell = document.createElement('div');
+            cell.className = `graph-cell level-${day.level}`;
+            
+            // Format date for tooltip
+            const date = new Date(day.date);
+            const formattedDate = new Intl.DateTimeFormat('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            }).format(date);
+            
+            cell.title = `${day.count} contributions on ${formattedDate}`;
+            graphContainer.appendChild(cell);
+        });
+
+        // Scroll to the end of the graph (most recent activity)
+        const wrapper = graphContainer.parentElement;
+        if (wrapper) {
+            // Use requestAnimationFrame to ensure DOM is rendered before scrolling
+            requestAnimationFrame(() => {
+                wrapper.scrollLeft = wrapper.scrollWidth;
+            });
+        }
+
+    } catch (error) {
+        console.error('Error loading GitHub graph:', error);
+        graphContainer.innerHTML = '<p class="error-message">Failed to load activity graph. :(</p>';
+    }
+}
+
 // Initial data load
 refreshDiscordUI();
+initGithubGraph();
 
 // Refresh data every minute
 setInterval(refreshDiscordUI, CACHE_DURATION);
+setInterval(initGithubGraph, CACHE_DURATION * 60); // Refresh GitHub graph every hour
 
 // Scroll Indicators with IntersectionObserver
 const scrollIndicator = document.getElementById('scroll-indicator');
@@ -415,25 +479,17 @@ function updateActiveDot(sectionId) {
 // IntersectionObserver for section tracking
 const observerOptions = {
     root: null,
-    rootMargin: '0px',
-    threshold: 0.5
+    rootMargin: '-50% 0px -50% 0px', // Trigger precisely at the center of the viewport
+    threshold: 0
 };
 
 const sectionObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
             const sectionId = entry.target.id;
-            currentSection = sectionId;
             updateActiveDot(sectionId);
             
-            // Hide scroll indicator after leaving hero
-            if (sectionId !== 'hero') {
-                scrollIndicator.classList.add('hidden');
-            } else {
-                scrollIndicator.classList.remove('hidden');
-            }
-            
-            // Show end message and footer on contact section
+            // Manage UI states based on section
             if (sectionId === 'contact') {
                 endMessage.classList.add('visible');
                 footer.classList.add('visible');
@@ -441,6 +497,11 @@ const sectionObserver = new IntersectionObserver((entries) => {
             } else {
                 endMessage.classList.remove('visible');
                 footer.classList.remove('visible');
+                if (sectionId === 'hero') {
+                    scrollIndicator.classList.remove('hidden');
+                } else {
+                    scrollIndicator.classList.add('hidden');
+                }
             }
         }
     });
