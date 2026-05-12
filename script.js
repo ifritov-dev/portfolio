@@ -398,8 +398,8 @@ async function initGithubGraph() {
         const data = await response.json();
         let contributions = data.contributions;
         
-        // Define "today" as May 11, 2026 (based on session context)
-        const today = new Date('2026-05-11');
+        // Define "today" as May 12, 2026 (based on current date)
+        const today = new Date('2026-05-12');
         
         // Ensure data is sorted by date ascending
         contributions.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -443,7 +443,7 @@ async function initGithubGraph() {
 
     } catch (error) {
         console.error('Error loading GitHub graph:', error);
-        graphContainer.innerHTML = '<p class="error-message">Failed to load activity graph. :(</p>';
+        graphContainer.innerHTML = '<p class="error-message">Failed to load activity graph.</p>';
     }
 }
 
