@@ -392,7 +392,7 @@ async function initGithubGraph() {
     if (!graphContainer) return;
 
     try {
-        const response = await fetch('https://github-contributions-api.jogruber.de/v4/bl43ex');
+        const response = await fetch('https://github-contributions-api.jogruber.de/v4/ifritov-dev');
         if (!response.ok) throw new Error('Failed to fetch GitHub contributions');
         
         const data = await response.json();
