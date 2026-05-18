@@ -55,7 +55,7 @@ A modern, animated portfolio website showcasing projects, skills, and contact in
 ### Installation
 1. Clone the repository:
 ```bash
-git clone https://github.com/Bl43eX/portfolio.git
+git clone https://github.com/ifritov-dev/portfolio.git
 cd portfolio
 ```
 
@@ -81,12 +81,11 @@ const DISCORD_USER_ID = '940165136440766464'; // Change to your ID
 ```
 
 ### GitHub Activity Graph
-Currently, the graph displays activity for the user `bl43ex`. To display your own GitHub contributions, replace `bl43ex` with your own GitHub username in the `fetch` URL within the `initGithubGraph` function in `script.js`:
+Currently, the graph displays activity for the user `ifritov-dev`. To display your own GitHub contributions, replace `ifritov-dev` with your own GitHub username in the `fetch` URL within the `initGithubGraph` function in `script.js`:
 ```javascript
 // Around line 400
-const response = await fetch('https://github-contributions-api.jogruber.de/v4/bl43ex');
+const response = await fetch('https://github-contributions-api.jogruber.de/v4/ifritov-dev');
 ```
-Change `bl43ex` to your own GitHub username.
 
 ### Customization
 - **Colors**: Modify `#FFD700` in `style.css` for accent color
@@ -169,7 +168,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Contact
 
-- **GitHub**: [@Bl43eX](https://github.com/Bl43eX)
+- **GitHub**: [@ifritov-dev](https://github.com/ifritov-dev)
 - **Telegram**: [@ifritov](https://t.me/ifritov)
 - **Email**: ifritov@atomicmail.io
 
